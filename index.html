@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>Offer崽 — 可爱版猜数字（4位 Bulls & Cows）</title>
+  <style>
+    /* 视觉重设计：主题色为暖橙色，使用卡片、阴影、圆角与轻微动画 */
+    :root{
+      --bg-start: #fff6ea;
+      --bg-end: #fff3e6;
+      --accent: #ff9f43;
+      --accent-2: #ff7b00;
+      --card: #ffffff;
+      --muted: #6b6b6b;
+      --glass: rgba(255,255,255,0.65);
+    }
+    html,body{height:100%;}
+    body{
+      margin:0;padding:20px;
+      font-family: -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'PingFang SC',"Microsoft Yahei",sans-serif;
+      background: linear-gradient(180deg,var(--bg-start),var(--bg-end));
+      display:flex;align-items:center;justify-content:center;color:#3b2b2b;
+    }
+
+    /* 主容器 */
+    .wrap{width:100%;max-width:960px;display:grid;grid-template-columns:1fr 360px;gap:18px}
+    @media (max-width:900px){.wrap{grid-template-columns:1fr}}
+
+    /* 左侧游戏卡 */
+    .game-card{background:var(--card);border-radius:20px;padding:18px;box-shadow:0 10px 30px rgba(255,123,0,0.08)}
+    .topbar{display:flex;align-items:center;gap:12px}
+    .logo{width:60px;height:60px;border-radius:14px;background:var(--glass);display:flex;align-items:center;justify-content:center;overflow:hidden;border:2px solid rgba(255,160,60,0.12)}
+    .logo img{width:100%;height:100%;object-fit:cover}
+    h1{margin:0;font-size:20px;color:var(--accent-2)}
+    p.lead{margin:4px 0 0;color:var(--muted);font-size:13px}
+
+    /* 控件 */
+    .controls{display:flex;gap:8px;margin-top:14px}
+    .btn{flex:1;padding:10px;border-radius:12px;border:none;background:linear-gradient(180deg,var(--accent),var(--accent-2));color:white;font-weight:700}
+    .btn.ghost{background:transparent;border:1px solid rgba(255,120,0,0.12);color:var(--accent-2)}
+
+    /* 输入区 */
+    .input-row{display:flex;gap:10px;margin-top:14px}
+    .guess-input{flex:1;padding:12px;border-radius:12px;border:1px solid rgba(0,0,0,0.06);font-size:16px}
+    .guess-btn{padding:12px 14px;border-radius:12px;border:none;background:var(--accent-2);color:white;font-weight:700}
+
+    /* 提示与历史 */
+    .hint{margin-top:12px;padding:12px;border-radius:12px;background:linear-gradient(90deg,rgba(255,200,140,0.12),transparent);font-weight:600}
+    .message{margin-top:12px;padding:12px;border-radius:12px;text-align:center}
+    .msg-warn{background:#fff7f0;border:1px solid rgba(255,140,0,0.06);color:var(--accent-2)}
+    .msg-success{background:linear-gradient(90deg,#fffdf8,#eaffea);border:1px solid rgba(60,180,60,0.08);color:#2f7a31}
+
+    /* 猜测历史（每次提交都会加入行） */
+    .guess-list{margin-top:12px;display:flex;flex-direction:column;gap:8px;max-height:240px;overflow:auto;padding-right:6px}
+    .guess-item{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-radius:10px;background:linear-gradient(90deg,rgba(255,159,67,0.03),transparent);font-weight:600}
+
+    /* 右侧侧栏：最佳成绩、过往成绩 */
+    .side-card{background:var(--card);border-radius:20px;padding:16px;box-shadow:0 10px 30px rgba(255,123,0,0.06)}
+    .stat{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px;border-radius:12px;background:linear-gradient(90deg,#fff9f3,#fffefb);margin-bottom:12px}
+    .stat h3{margin:0;font-size:14px;color:var(--muted)}
+    .stat .value{font-size:20px;color:var(--accent-2);font-weight:800}
+
+    .history-list{max-height:360px;overflow:auto}
+    .history-row{display:flex;justify-content:space-between;padding:8px;border-radius:8px;margin-bottom:8px;background:linear-gradient(90deg,rgba(255,200,120,0.03),transparent)}
+    .muted{color:var(--muted);font-size:13px}
+
+    /* 胜利时简单的彩带动画（轻量） */
+    .confetti{position:fixed;left:0;right:0;top:0;bottom:0;pointer-events:none}
+    .confetti span{position:absolute;width:10px;height:16px;opacity:0.95;border-radius:2px;animation:fall 1200ms linear forwards}
+    @keyframes fall{0%{transform:translateY(-10vh) rotate(0)}100%{transform:translateY(110vh) rotate(540deg);opacity:1}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="game-card">
+      <div class="topbar">
+        <div class="logo" title="Offer崽">
+          <img src="file:///E:/【08】Offer崽素材/offer崽.png" alt="Offer崽 图标">
+        </div>
+        <div>
+          <h1>Offer崽 · 猜数字（4位）</h1>
+          <p class="lead">每次提交会得到 xA yB 的提示，4A 则拿到 Offer 🎉</p>
+        </div>
+      </div>
+
+      <div class="controls">
+        <button id="btn-easy" class="btn">简单（不重复）</button>
+        <button id="btn-hard" class="btn ghost">困难（允许重复）</button>
+      </div>
+
+      <div class="input-row">
+        <input id="guessInput" class="guess-input" type="text" maxlength="4" placeholder="输入 4 位数字，例如：0123">
+        <button id="guessBtn" class="guess-btn">猜！</button>
+      </div>
+
+      <div id="hint" class="hint">请选择难度开始游戏</div>
+      <div id="message" class="message msg-warn">游戏尚未开始</div>
+
+      <div class="guess-list" id="guessList" aria-live="polite"></div>
+    </div>
+
+    <aside class="side-card">
+      <div class="stat">
+        <h3>最佳成绩</h3>
+        <div class="value" id="best">—</div>
+      </div>
+
+      <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center">
+        <div style="flex:1" class="muted">过往获 Offer 记录（最近 20 条）</div>
+        <button id="clearHistory" class="btn ghost" style="padding:8px 10px;font-size:13px">清除</button>
+      </div>
+
+      <div class="history-list" id="historyList"></div>
+    </aside>
+  </div>
+
+  <!-- 彩带容器 -->
+  <div class="confetti" id="confetti"></div>
+
+  <script>
+    /*
+      改进说明：
+      - 视觉：使用两栏布局（游戏区 + 成绩侧栏），卡片化、圆角、暖橙主题
+      - 功能：保留 4 位 Bulls&Cows 逻辑；新增明显的“最佳成绩卡片”、完整的过往成绩列表、猜测历史记录
+      - 本文件包含详细中文注释，所有数据保存在 localStorage 下，键名保持兼容
+    */
+
+    // 本地存储键名（与之前版本一致，兼容已有数据）
+    const STORAGE_BEST_KEY = 'offer_game_best_bulls';
+    const STORAGE_HISTORY_KEY = 'offer_game_history_bulls';
+
+    // 页面元素引用
+    const btnEasy = document.getElementById('btn-easy');
+    const btnHard = document.getElementById('btn-hard');
+    const guessInput = document.getElementById('guessInput');
+    const guessBtn = document.getElementById('guessBtn');
+    const hint = document.getElementById('hint');
+    const message = document.getElementById('message');
+    const guessList = document.getElementById('guessList');
+    const bestEl = document.getElementById('best');
+    const historyList = document.getElementById('historyList');
+    const clearHistoryBtn = document.getElementById('clearHistory');
+    const confettiRoot = document.getElementById('confetti');
+
+    // 游戏状态
+    let secret = '';
+    let allowRepeat = false; // 简单：false（不重复）；困难：true（允许重复）
+    let tries = 0;
+
+    // 初始化：渲染历史与最佳
+    function init(){
+      renderBest();
+      renderHistory();
+    }
+
+    // 生成 4 位秘密数字（字符串）
+    function generateSecret(allowRepeat){
+      if(allowRepeat){
+        let arr = [];
+        for(let i=0;i<4;i++) arr.push(String(Math.floor(Math.random()*10)));
+        return arr.join('');
+      } else {
+        const pool = ['0','1','2','3','4','5','6','7','8','9'];
+        const out = [];
+        for(let i=0;i<4;i++) out.push(pool.splice(Math.floor(Math.random()*pool.length),1)[0]);
+        return out.join('');
+      }
+    }
+
+    // 开始新局
+    function newGame(){
+      secret = generateSecret(allowRepeat);
+      tries = 0;
+      guessList.innerHTML = '';
+      hint.textContent = `模式：4位数字 ${allowRepeat? '(允许重复)': '(不重复)'} — 输入并提交你的猜测（允许前导0）`;
+      message.textContent = '游戏已开始，祝你好运～';
+      message.className = 'message msg-warn';
+      guessInput.value = '';
+      guessInput.focus();
+      console.log('[Offer崽] secret =', secret);
+    }
+
+    // 计算 bulls(A) 与 cows(B)
+    function calcBullsAndCows(secretStr, guessStr){
+      let bulls = 0;
+      for(let i=0;i<4;i++) if(secretStr[i] === guessStr[i]) bulls++;
+      const countS = {};
+      const countG = {};
+      for(let i=0;i<4;i++){
+        countS[secretStr[i]] = (countS[secretStr[i]]||0) + 1;
+        countG[guessStr[i]] = (countG[guessStr[i]]||0) + 1;
+      }
+      let total = 0;
+      for(const d in countG) if(countS[d]) total += Math.min(countG[d], countS[d]);
+      const cows = total - bulls;
+      return {bulls, cows};
+    }
+
+    // 添加每次猜测的条目到页面（即时反馈）
+    function pushGuessRecord(guess, bulls, cows){
+      const el = document.createElement('div');
+      el.className = 'guess-item';
+      el.innerHTML = `<div>${guess}</div><div>${bulls}A${cows}B</div>`;
+      guessList.prepend(el);
+    }
+
+    // 处理猜测提交
+    function handleGuess(){
+      const raw = guessInput.value.trim();
+      if(!/^[0-9]{4}$/.test(raw)){
+        message.textContent = '请输入恰好 4 位数字（允许前导 0），例如 0123';
+        message.className = 'message msg-warn';
+        return;
+      }
+      if(!allowRepeat){
+        if(new Set(raw.split('')).size !== 4){
+          message.textContent = '当前模式不允许重复数字，请输入 4 个互不相同的数字。';
+          message.className = 'message msg-warn';
+          return;
+        }
+      }
+
+      tries += 1;
+      const {bulls, cows} = calcBullsAndCows(secret, raw);
+      pushGuessRecord(raw, bulls, cows);
+
+      if(bulls === 4){
+        message.textContent = `恭喜你拿到了 Offer！用时 ${tries} 次`;
+        message.className = 'message msg-success';
+        // 胜利特效
+        burstConfetti();
+        // 保存记录
+        saveWin(tries);
+      } else {
+        message.textContent = `${bulls}A${cows}B — 继续加油！`;
+        message.className = 'message msg-warn';
+      }
+      guessInput.value = '';
+      guessInput.focus();
+    }
+
+    // 保存胜利记录并更新最佳成绩（保留最近 20 条）
+    function saveWin(attempts){
+      const raw = localStorage.getItem(STORAGE_HISTORY_KEY);
+      let hist = raw ? JSON.parse(raw) : [];
+      hist.unshift({time:new Date().toLocaleString(), attempts, mode: allowRepeat? '困难(允重复)' : '简单(不重复)'});
+      if(hist.length > 20) hist = hist.slice(0,20);
+      localStorage.setItem(STORAGE_HISTORY_KEY, JSON.stringify(hist));
+      renderHistory();
+
+      const bestRaw = localStorage.getItem(STORAGE_BEST_KEY);
+      const best = bestRaw ? JSON.parse(bestRaw) : null;
+      if(!best || attempts < best.attempts){
+        const newBest = {attempts, mode: allowRepeat? '困难(允重复)' : '简单(不重复)', time: new Date().toLocaleString()};
+        localStorage.setItem(STORAGE_BEST_KEY, JSON.stringify(newBest));
+        renderBest();
+      }
+
+      // 自动开始下一局（短延迟）
+      setTimeout(newGame, 900);
+    }
+
+    // 渲染过往成绩（右侧）
+    function renderHistory(){
+      const raw = localStorage.getItem(STORAGE_HISTORY_KEY);
+      const hist = raw ? JSON.parse(raw) : [];
+      historyList.innerHTML = '';
+      if(hist.length === 0){
+        historyList.innerHTML = '<div class="muted">暂无记录，赢得你的第一个 Offer 吧！</div>';
+        return;
+      }
+      hist.forEach(item=>{
+        const r = document.createElement('div');
+        r.className = 'history-row';
+        r.innerHTML = `<div class="muted">${item.time} · ${item.mode}</div><div><strong>${item.attempts} 次</strong></div>`;
+        historyList.appendChild(r);
+      });
+    }
+
+    // 渲染最佳成绩
+    function renderBest(){
+      const raw = localStorage.getItem(STORAGE_BEST_KEY);
+      if(!raw){ bestEl.textContent = '—'; return; }
+      const b = JSON.parse(raw);
+      bestEl.textContent = `${b.attempts} 次（${b.mode}）`;
+    }
+
+    // 清除历史
+    function clearHistory(){
+      if(!confirm('确定要清除过往成绩吗？此操作不可撤销。')) return;
+      localStorage.removeItem(STORAGE_HISTORY_KEY);
+      localStorage.removeItem(STORAGE_BEST_KEY);
+      renderHistory();renderBest();
+    }
+
+    // 难度切换
+    function setMode(isHard){
+      allowRepeat = !!isHard;
+      if(allowRepeat){ btnHard.classList.remove('ghost'); btnEasy.classList.add('ghost'); }
+      else { btnEasy.classList.remove('ghost'); btnHard.classList.add('ghost'); }
+      newGame();
+    }
+
+    // 简单的彩带特效（生成若干小彩条，自动清理）
+    function burstConfetti(){
+      const colors = ['#FF7B00','#FFB74D','#FFD54F','#FF7043','#FF8A65'];
+      const count = 22;
+      for(let i=0;i<count;i++){
+        const s = document.createElement('span');
+        s.style.left = Math.random()*100 + '%';
+        s.style.top = (-10 - Math.random()*10) + 'vh';
+        s.style.background = colors[Math.floor(Math.random()*colors.length)];
+        s.style.transform = `rotate(${Math.random()*360}deg)`;
+        s.style.animationDuration = (900 + Math.random()*600) + 'ms';
+        confettiRoot.appendChild(s);
+        // 清理
+        setTimeout(()=>{ s.remove(); }, 2200);
+      }
+    }
+
+    // 事件绑定
+    btnEasy.addEventListener('click', ()=>setMode(false));
+    btnHard.addEventListener('click', ()=>setMode(true));
+    guessBtn.addEventListener('click', handleGuess);
+    guessInput.addEventListener('keydown', (e)=>{ if(e.key === 'Enter') handleGuess(); });
+    clearHistoryBtn.addEventListener('click', clearHistory);
+
+    // 启动
+    init();
+    setMode(false); // 默认不重复模式
+  </script>
+</body>
+</html>
